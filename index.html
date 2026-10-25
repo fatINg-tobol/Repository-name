@@ -1083,6 +1083,24 @@
     display:block;margin-top:10px;font-size:17px;letter-spacing:.22em;
     color:var(--rose-deep);font-weight:600
   }
+  /* 最后一幕的出口（2026-10-26 用户要的）。
+     **只在电脑上露**：手机浏览器里 window.close() 关不掉标签页（那个标签不是脚本开的），
+     留一颗按不动的按钮不如不露。
+     这两条挨着写、不塞进上面那个桌面 media 块，是因为那条块在本文件更靠前的地方，
+     后写的普通声明会把它压回去 —— 同一处放一对，就没有先后顺序的坑。
+     样子做成浅色描边的「次要按钮」：它是出口，不是这一幕的重点，
+     重点还是上面那句「生日快乐 · 明年见」。 */
+  .exitwrap{display:none;margin-top:22px;text-align:center}
+  .exitwrap .btn{
+    background:none;color:var(--rose-deep);border:1px solid rgba(201,63,104,.38);
+    box-shadow:none;font-size:14px;padding:11px 26px;
+    letter-spacing:.1em
+  }
+  .exitwrap .btn:active{transform:scale(.96);background:rgba(201,63,104,.07)}
+  .exitnote{display:none;margin:12px 0 0;font-size:12.5px;color:var(--dim);
+            text-align:center;line-height:1.9}
+  .exitnote b{color:var(--rose-deep);font-weight:600}
+  @media (min-width:560px){ .exitwrap{display:block} }
 
   /* 幕7 天上那只小蝴蝶：不参与布局（星图半径是按 offsetHeight 量的），也不吃拖动。
      它故意不挂 .reveal——那样子幕一开就在烟花底下飞；也不进 .reveal 那份名单，
@@ -1595,6 +1613,14 @@
       明年得从头攒。
       <span class="big">生日快乐 · 明年见</span>
     </p>
+
+    <!-- 电脑上的出口。打包那一份是全屏打开的（没有地址栏、没有标签页），
+         所以她得有个能点的地方走出去，不能只靠 Alt+F4。
+         .exitnote 是「万一没关掉」那句话，默认藏着，见下面 exitGift()。 -->
+    <div class="exitwrap" id="exitWrap">
+      <button class="btn" type="button" id="exitBtn">关掉这一页</button>
+      <p class="exitnote" id="exitNote"></p>
+    </div>
   </section>
 
   <!-- 星盘：光遇式的菜单。只点亮走过的路，点一颗就跳过去 -->
@@ -2235,6 +2261,76 @@ $('#musicBtn').onkeydown = ev => {
   }
 })();
 
+/* ---------------------------------------------------- 麦克风：开头就要下来 */
+/* 用户 2026-10-26 提的：权限框原来是等她在蜡烛那一幕点「吹」才弹的，
+   正好砸在最要紧的那一下上，太难受。所以改成**页面一打开就要**，
+   弹窗出现在她拆信封的时候，不打扰。
+
+   要下来之后**一直捏着不放**（不是只留个「已授权」）：file:// 的源是不透明的，
+   浏览器不一定记得住那次授权，中途松手、到蜡烛那幕再要一次，很可能又弹一遍
+   —— 那就等于没改。代价是这中间浏览器一直亮着「正在使用麦克风」那个记号，
+   到蜡烛那幕收摊才还回去。
+
+   她要是拒绝，这里一声不吭：拒绝的那一刻她正在看信封，不该被一段红字打断；
+   蜡烛那幕原来那条长按退路照旧在，一句都不会少。 */
+const micPrimer = (function(){
+  let stream = null, state = 'idle', tries = 0;
+  const canAsk = () => !!(window.isSecureContext && navigator.mediaDevices
+                          && navigator.mediaDevices.getUserMedia);
+  const gum = c => navigator.mediaDevices.getUserMedia(c);
+
+  function ask(){
+    /* 已经握在手里、正在要、已经拒了，都不再开口。
+       上限 2 次：一次在页面刚打开（不用手势也会弹，但 iOS/微信里那次可能不算数），
+       一次在她的第一个手势（拆信封那下）—— iOS 上真正管用的是后一次。 */
+    if (stream || state === 'asking' || state === 'denied' || state === 'nope') return;
+    if (tries >= 2) return;
+    tries++;
+    if (!canAsk()){ state = 'nope'; return; }     // 局域网 http 那种，压根没这个接口
+    state = 'asking';
+    /* 先要「原声」、失败退回最朴素的，理由跟蜡烛那幕里那段注释一样：
+       回声消除/降噪会把吹气的宽带噪声当噪声抹掉，rms 就上不去。 */
+    gum({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}})
+      .catch(() => gum({audio:true}))
+      .then(s => { stream = s; state = 'held'; })
+      .catch(() => { state = tries >= 2 ? 'denied' : 'idle'; });
+  }
+
+  return {
+    ask: ask,
+    /* 蜡烛那一幕来取：给了就归它管（由它自己关）。这里必须放手，不然两处各关一次，
+       更糟的是她走开又回来时这里还递得出一条已经关掉的死轨。 */
+    take: function(){
+      const s = stream;
+      stream = null;
+      if (s) state = 'given';
+      return s;
+    },
+    /* 收摊：没被取走的那条（她在蜡烛那幕根本没点「吹」就走开了）在这儿还回去。
+       对已经停止的轨再 stop() 是空操作，所以多叫几次没关系。 */
+    release: function(){
+      if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+    },
+    state: () => state,
+    tries: () => tries
+  };
+})();
+/* 页面刚打开就要。等 700ms 是让封面先画出来再弹框，不然第一眼就是浏览器那个框。 */
+setTimeout(micPrimer.ask, 700);
+/* 她的第一个手势再补一次（音乐那边叫「点火」的那一下）。
+   单开一个监听、不挤进音乐那个 unlock()：音乐那个是 {once:true} 的，
+   谁先谁后不该互相影响，两件事就分开写。 */
+['pointerdown', 'touchstart', 'keydown', 'wheel', 'scroll'].forEach(function(ev){
+  window.addEventListener(ev, function(){ micPrimer.ask(); },
+                         {once: true, passive: true});
+});
+
+/* 吹蜡烛这一幕的字要分设备：手机上说「对着手机」，电脑上说「对着麦克风」。
+   同一句话在电脑上读着别扭——那台电脑不是手机。宽度一量就知道是哪种。 */
+const isDesk = () => window.matchMedia('(min-width:560px)').matches;
+const micWord = () => isDesk() ? '对着麦克风吹一口气' : '对着手机吹一口气';
+const micLine = () => isDesk() ? '对着麦克风，吹——' : '对着手机底部，吹——';
+
 /* ---------------------------------------------------- 幕6 吹蜡烛 */
 /* 走开的时候（go() 里）会叫一声，把麦克风收掉；没开麦就什么都不做 */
 let candleStopMic = null;
@@ -2246,6 +2342,10 @@ let cakeSpin = null;
   const box = $('#cakeBox'), note = $('#candleNote'), lead = $('#candleLead');
   let done = false, stream = null, ac = null, listening = false;
 
+  /* 按钮上的字分设备（手机/电脑）。转屏也可能把宽度跨过那条线，所以 resize 时再对一遍。 */
+  btn.textContent = micWord();
+  window.addEventListener('resize', function(){ btn.textContent = micWord(); });
+
   /* 收摊：关轨、关 AudioContext。tick 那边看到 listening=false 就自己退出 */
   function quiet(){
     listening = false;
@@ -2254,6 +2354,9 @@ let cakeSpin = null;
   }
 
   candleStopMic = function(){
+    /* 开头就握在手里的那一条也要还回去（她可能根本没点「吹」就走开了）。
+       放在最前头：下面那个 return 会把没开过麦的情况直接送走，漏在这儿就还不了。 */
+    micPrimer.release();
     if (done || !listening) return;            // 没开麦（走了长按兜底那条路）就不用收拾
     quiet();
     btn.disabled = false; btn.style.display = '';   // 回来还能再吹一次
@@ -2307,7 +2410,7 @@ let cakeSpin = null;
      但也不能让她一个人对着手机一直吹。 */
   function showHint(){
     if (done) return;
-    note.innerHTML = '对着手机底部，吹——'
+    note.innerHTML = micLine()
       + '<br><span style="color:var(--dim);font-size:12.5px">吹不动的话，按住屏幕一秒也行。</span>';
   }
 
@@ -2346,6 +2449,13 @@ let cakeSpin = null;
     }
     btn.disabled = true;
     barWrap.style.display = 'block';
+    /* 开头就握在手里的那一条优先用 —— 她那会儿已经点过「允许」了，
+       所以这一下不会再弹框，正是用户要的效果（tools/e2e.py 里有一条断言守着：
+       整个流程里 getUserMedia 只被调用过一次）。 */
+    const heldNow = micPrimer.take();
+    if (heldNow){ listen(heldNow); return; }
+    /* 走到这儿说明开头那两次都没成（她拒绝了、或者那两次就不算数）。
+       那就在手势里老老实实再要一次；被拒的话浏览器不会再弹框，只会直接拒。 */
     /* 先要「原声」：关掉回声消除/降噪/自动增益 —— 这三样本来是给人声通话调的，
        吹气的宽带噪声会被它们当成噪声抹掉，rms 就上不去。
        但有些安卓内核碰上这几个开关会给一条静音的轨（或者直接拒），
@@ -2353,7 +2463,15 @@ let cakeSpin = null;
     const gum = c => navigator.mediaDevices.getUserMedia(c);
     gum({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}})
       .catch(() => gum({audio:true}))
-      .then(s => {
+      .then(listen)
+      .catch(() => {
+        useFallback('麦克风被拒绝了。');
+      });
+  };
+
+  /* 拿到（或早就拿到的）那条轨，接上分析器开始听。
+     抽成一个函数是因为现在有两条路都落到这儿：开头就握着的那条、和这一次现要的。 */
+  function listen(s){
       stream = s;
       const actx = warmAudio();
       if (!actx) { useFallback('这个浏览器里听不到麦克风的声音。'); return; }
@@ -2363,7 +2481,7 @@ let cakeSpin = null;
       src.connect(an);
       const buf = new Uint8Array(an.fftSize);
       btn.style.display = 'none';
-      note.textContent = '对着手机底部，吹——';
+      note.textContent = micLine();
       listening = true;
       let loud = 0, floor = 0, fn = 0, peak = 0, t0 = Date.now(), hinted = false;
       (function tick(){
@@ -2386,20 +2504,17 @@ let cakeSpin = null;
         if (rms > gate) loud++; else loud = Math.max(0, loud - 2);
         if (loud > 8) { blow(); return; }
         /* 看门狗：两秒半里连一丝波动都没有（峰值 < 0.004），说明这条轨或这个
-           context 是死的，声音压根没进来。别再让她对着手机吹了，明说，给退路。
+           context 是死的，声音压根没进来。别再让她对着麦克风干吹了，明说，给退路。
            四秒还没吹灭，就把「长按也行」那行小字露出来 —— 不提前说，
            是为了别一上来就告诉她「这个功能可能是坏的」。 */
         if (!hinted && now - t0 > 4000){ hinted = true; showHint(); }
         if (now - t0 > 2500 && peak < 0.004){
-          useFallback('这台手机没能把麦克风收到的声音交出来。');
+          useFallback('这个浏览器没能把麦克风收到的声音交出来。');
           return;
         }
         requestAnimationFrame(tick);
       })();
-    }).catch(() => {
-      useFallback('麦克风被拒绝了。');
-    });
-  };
+  }
 })();
 
 /* ---------------------------------------------------- 幕6 那颗会转的蛋糕 */
@@ -3264,6 +3379,36 @@ function albStart(){
   albShow.show(0);
   albShow.start();
 }
+
+/* ---------------------------------------------------- 最后一幕的出口
+   打包那一份是 --start-fullscreen 打开的：没有地址栏、没有标签页、没有标题栏，
+   走到最后一幕她只能按 Alt+F4 —— 得给她一个能点的地方走出去（2026-10-26 用户要的）。
+
+   「自己关掉自己」这件事浏览器是管的，但规矩正好对我们有利：规范允许关掉
+   **会话历史里只有一条记录**的窗口（不是只有「脚本打开的窗口」才能关）。
+   我们这个页面从不 pushState、不改 hash，history.length 一直是 1，所以关得掉。
+   实测过 Chrome 三种打开方式（--new-window / --start-fullscreen / --app=）都真关了，
+   见 tools/_closeprobe.py —— 连浏览器进程都跟着退了，说明窗口是真没了。
+
+   万一哪天被拦下来（她要是先在页面里点了什么跳转、history 变长了就会），
+   窗口一点动静都没有，她只会以为按钮坏了。所以在这儿等一会儿：
+   还在，就把话说明白。 */
+(function(){
+  const b = $('#exitBtn'), n = $('#exitNote');
+  if (!b) return;
+  b.onclick = function(ev){
+    ev.stopPropagation();
+    b.disabled = true;
+    try { window.close(); } catch (err){}
+    setTimeout(function(){
+      if (document.hidden) return;                 // 关掉了（藏起来的那一下就是它）
+      b.disabled = false;
+      n.style.display = '';
+      n.innerHTML = '没关掉的话，按 <b>Alt + F4</b>，'
+                  + '或者点窗口右上角的 <b>×</b>。';
+    }, 420);
+  };
+})();
 
 /* ---------------------------------------------------- 幕4.5 那一分多钟的画面
    云、鸟、远处的城、地面三层土坡、几盏路灯、星星、糖果色的小点、两只 Claude
