@@ -823,21 +823,65 @@
   #breathe p.on{opacity:1;transform:none}
   #breathe p:last-child{margin-bottom:0;color:#ffb9d1;font-weight:600}
 
-  /* ---------- 桌面：收成居中的手机框，免得全屏拉得太空 ---------- */
+  /* ---------- 桌面：铺满整个窗口，内容按窗口放大 ----------
+     以前这里是把画面收成一个居中的手机框（430×860、圆角、投影），
+     手机上看着没问题，电脑上打开就只占中间一条，四周一大片深色。
+     现在改成：#stage 保持第 40 行那套「四边为 0」的全铺开，**不做任何
+     宽高/圆角/transform 覆盖** —— 窗口多大就铺多大。
+     变宽的代价是内容会显得稀，所以下面只动两样：
+       ① 正文那几类字按窗口宽度放大一档（clamp 的上限都卡住了，
+          所以 4K 屏上也不会变成一行字占满屏宽）；
+       ② 几块按 px 钉死的画面（信封火漆、蛋糕、分隔线）跟着放大一点，
+          以及几张卡片放宽 —— 窗口够宽就真的用上横向空间。
+     这里**不动**任何一幕的排版结构、不动动效、不动 z-index 顺序：
+     铺满只是把容器还给窗口，不重排。 */
   @media (min-width:560px){
     body{background:
       radial-gradient(120% 92% at 50% -12%,#ffe8f0 0%,#fff6f8 46%,#ffdbe8 100%)}
-    #stage{
-      left:50%; top:50%; right:auto; bottom:auto;
-      width:min(430px,92vw); height:min(860px,93vh);
-      transform:translate(-50%,-50%);
-      border-radius:28px; overflow:hidden;
-      box-shadow:0 36px 92px rgba(201,63,104,.22),
-                 0 0 0 1px rgba(201,63,104,.10),
-                 inset 0 2px 0 rgba(255,255,255,.9);
-    }
-    .act{padding-left:26px;padding-right:26px}
-    .tapcue{bottom:22px}
+    .act{padding-left:clamp(26px,6vw,110px);padding-right:clamp(26px,6vw,110px)}
+    .tapcue{bottom:26px;font-size:13.5px}
+
+    .kicker{font-size:clamp(12px,1.02vw,15px);letter-spacing:.42em;margin-bottom:18px}
+    .big{font-size:clamp(34px,3.3vw,62px)}
+    .lead{font-size:clamp(16.5px,1.24vw,21px);max-width:26em;margin-top:20px}
+    .rnum.stars{font-size:clamp(26px,2.4vw,44px)}
+    .rnum.txt{font-size:clamp(28px,2.7vw,48px)}
+    .rsub{font-size:clamp(17px,1.3vw,22px)}
+    .rnote{font-size:clamp(13.5px,1.06vw,17px);max-width:24em}
+    .hold{font-size:clamp(18px,1.35vw,23px)}
+
+    /* 按 px 钉死的画面：窗口大了跟着长一点，不然缩在中间一小块。
+       注意**没有** .cake —— 蛋糕那套是「盒子 224 + 盘子 236 + 外环 300」
+       三个尺寸互相咬着的（盘子得比盒子宽、外环再围一圈），单把盒子放大
+       就把这套关系拆了。自测里有两条正是盯着这个（盒子 224×224、
+       盘子比盒子宽），所以那一幕保持原尺寸 */
+    .seal{width:104px;height:104px}
+    .rule{width:124px}
+
+    /* 卡片类放宽。注意 .mv 的 aspect-ratio 由上面 620px 那条管着，这里只改宽 */
+    .mv{max-width:min(76vw,980px)}
+    .qbar,.chartcard{max-width:min(72vw,900px)}
+    textarea{max-width:min(60vw,560px)}
+
+    /* 信（幕4）：手机上 22em 正好一行读下来，电脑上太窄了，放宽一档 */
+    .letter{max-width:30em;font-size:clamp(16.5px,1.25vw,21px)}
+
+    /* 相册：照片框被 238px 封着，电脑上缩成一小张，跟着窗口长一点；
+       说明文字同理放宽，不然读起来是一条竖线 */
+    .albstage{width:min(38vw,300px)}
+    .albword{max-width:26em;font-size:clamp(13.5px,1.06vw,17px)}
+    .albend{font-size:clamp(13px,1.02vw,16px)}
+
+    /* 星空那几行字幕：手机上 12px 够看，投到电脑屏上就太小了 */
+    .skycap .t1{font-size:clamp(13.5px,1.15vw,18px)}
+    .skycap .t2{font-size:clamp(12px,1vw,16px)}
+    .skycap .t3{font-size:clamp(12.5px,1.05vw,17px)}
+    .skycap .t4{font-size:clamp(11.5px,.98vw,15px)}
+    .skyfind .ft{font-size:clamp(14.5px,1.2vw,19px)}
+    .skyfind .fh{font-size:clamp(12px,1vw,16px)}
+    /* 这句会横着铺满，宽屏上得给它收个边，不然一行字从这头拉到那头 */
+    .skycmp{font-size:clamp(12.5px,1.05vw,17px);padding:0 clamp(24px,5vw,110px);
+            max-width:min(74vw,940px);margin-left:auto;margin-right:auto}
   }
 
   /* 矮屏（老款小手机）：上下的字挤一挤，把地方让给星图 */
@@ -1594,7 +1638,7 @@
 
   <!-- 右下角的小标签：这一页做了多久。数字见 tools/_worktime.json（从会话记录里量的，
        第一次到最后一版实际动手的时间 767 分钟），换数字只改这一处。 -->
-  <div id="wktag" title="从建第一个文件到最后一版，实际动手的时间">累计制作 <b>16 小时 51 分</b></div>
+  <div id="wktag" title="从建第一个文件到最后一版，实际动手的时间">累计制作 <b>17 小时 43 分</b></div>
 
   <!-- 《明明就》就这一个音频源，引子和幕4.5 共用它：
        引子是它的头 19.42 秒，人声一出来就交棒，幕4.5 接着往下放，中间没有接缝，
@@ -4416,8 +4460,32 @@ function startSky(){
       const stkH = $('.skystack').offsetHeight;
       const bandTop = capH + 34, bandBot = H - stkH - 12;
       const band = Math.max(140, bandBot - bandTop);
-      R = Math.max(W * 0.30, Math.min(W * 0.46, band / 2));
+      // 星图半径。手机上是「尽量按宽度铺满、但别小于 W*0.30」，
+      // 因为手机 W 小、上下两块文字占掉的高度相对稳定，band 基本够用。
+      // 但桌面铺满之后 W 能到 1600 多，上下那两块文字的定高没变，
+      // band/2 反而成了更小的那个 —— 原来那个**无条件的** W*0.30 下限
+      // 就会把星图顶出上下边界，顶上那颗「东」和底下那颗「西」被切掉。
+      // 所以下限自己也得先过 band 这一关：宁可小一圈，不能切。
+      R = Math.min(Math.max(W * 0.30, Math.min(W * 0.46, band / 2)), band / 2);
       cx = W / 2; cy = bandTop + band / 2;
+      // 蝴蝶（#skyFly）本来是 CSS 按百分比钉的（left:26%;top:44%），
+      // 那组数只在手机那个尺寸下正好落在星图左上方。铺满桌面之后星图
+      // 还是居中一个圆、但窗口宽得多，26% 那个点就飘到圆外面去了 —— 变成
+      // 一只孤零零挂在空天里的蝴蝶。所以改成跟着星图的圆心和半径摆：
+      // 手机上的实测位置离圆心大约 0.75R、方位左上，这里照抄那个比例，
+      // 于是手机上一动不动，电脑上自动贴着圆的左上边。
+      const bf = $('#skyFly');
+      if (bf){ bf.style.left = (cx - R * 0.53) + 'px';
+               bf.style.top  = (cy - R * 0.53) + 'px'; }
+      // 把算出来的这几个数挂到 dataset 上（照 cv.dataset.nstar 那个先例）：
+      // 自测要核「星图有没有超出上下那条带、方位字会不会被切」，
+      // 闭包里的变量外面看不见。以前自测是把这套公式抄了一遍，
+      // 抄的东西早晚会跟这里走散 —— 这次就是（公式一改，抄的那份就错了）。
+      cv.dataset.r = R.toFixed(1);
+      cv.dataset.cx = cx.toFixed(1);
+      cv.dataset.cy = cy.toFixed(1);
+      cv.dataset.bandTop = bandTop.toFixed(1);
+      cv.dataset.bandBot = bandBot.toFixed(1);
     }
 
     const ASK = '天上最亮的那颗，帮我找一下——';
